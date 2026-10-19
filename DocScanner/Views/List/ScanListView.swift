@@ -27,8 +27,8 @@ struct ScanListView: View {
                 ScanDetailView(documentID: documentID)
             }
         }
-        .pageCapture($captureRequest) { images in
-            Task { await saveNewDocument(images) }
+        .pageCapture($captureRequest) { pages in
+            Task { await saveNewDocument(pages) }
         }
         .overlay {
             if store.isSaving {
@@ -150,8 +150,8 @@ struct ScanListView: View {
     }
 
     @MainActor
-    private func saveNewDocument(_ images: [UIImage]) async {
-        if let document = await store.createDocument(from: images) {
+    private func saveNewDocument(_ pages: [CapturedPage]) async {
+        if let document = await store.createDocument(from: pages) {
             searchText = ""
             path = [document.id]
         }

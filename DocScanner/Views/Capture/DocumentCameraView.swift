@@ -3,8 +3,9 @@ import VisionKit
 
 /// VisionKit's document camera: finds the page edges, corrects perspective and can capture several pages.
 struct DocumentCameraView: UIViewControllerRepresentable {
-    var onFinish: ([UIImage]) -> Void
+    var onFinish: ([CapturedPage]) -> Void
     var onCancel: () -> Void
+    var onFailure: (Error) -> Void
 
     func makeCoordinator() -> Coordinator {
         Coordinator(parent: self)
@@ -31,8 +32,8 @@ struct DocumentCameraView: UIViewControllerRepresentable {
             _ controller: VNDocumentCameraViewController,
             didFinishWith scan: VNDocumentCameraScan
         ) {
-            let images = (0..<scan.pageCount).map { scan.imageOfPage(at: $0) }
-            parent.onFinish(images)
+            // The page images are read from the scan one at a time while saving, not all at once here.
+            parent.onFinish((0..<scan.pageCount).map { CapturedPage.scan(scan, index: $0) })
         }
 
         func documentCameraViewControllerDidCancel(_ controller: VNDocumentCameraViewController) {
@@ -43,7 +44,7 @@ struct DocumentCameraView: UIViewControllerRepresentable {
             _ controller: VNDocumentCameraViewController,
             didFailWithError error: Error
         ) {
-            parent.onCancel()
+            parent.onFailure(error)
         }
     }
 }

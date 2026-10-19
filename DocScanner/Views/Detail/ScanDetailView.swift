@@ -32,8 +32,8 @@ struct ScanDetailView: View {
                         recognitionBanner
                     }
                 }
-                .pageCapture($captureRequest) { images in
-                    Task { await store.addPages(images, to: documentID) }
+                .pageCapture($captureRequest) { pages in
+                    Task { await store.addPages(pages, to: documentID) }
                 }
                 .alert("เปลี่ยนชื่อเอกสาร", isPresented: $isRenaming) {
                     TextField("ชื่อเอกสาร", text: $renameText)
@@ -143,6 +143,12 @@ struct ScanDetailView: View {
                         shareItem = ShareItem(items: [document.fullText])
                     }
                     .disabled(document.fullText.isEmpty)
+                    if document.pages.contains(where: \.recognitionFailed) {
+                        Button("อ่านข้อความใหม่", systemImage: "arrow.clockwise") {
+                            store.retryFailedRecognition(in: documentID)
+                        }
+                        .disabled(store.isRecognizing(documentID))
+                    }
                 }
                 Button("ลบเอกสาร", systemImage: "trash", role: .destructive) {
                     isConfirmingDelete = true

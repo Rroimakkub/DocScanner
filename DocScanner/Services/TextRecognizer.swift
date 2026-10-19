@@ -28,21 +28,23 @@ enum TextRecognizer {
         do {
             return try performRecognition(on: image, languages: preferredLanguages)
         } catch {
-            // Vision rejects some language combinations on some OS versions; retry with its defaults.
+            // Vision rejects some language combinations on some OS versions; retry with automatic detection.
             return try performRecognition(on: image, languages: nil)
         }
     }
 
+    /// With no usable `languages`, Vision detects the language itself. Its default list is English only,
+    /// which would read Thai as Latin letters.
     private static func performRecognition(on image: CGImage, languages: [String]?) throws -> [RecognizedLine] {
         let request = VNRecognizeTextRequest()
         request.recognitionLevel = .accurate
         request.usesLanguageCorrection = true
-        if let languages {
-            let supported = (try? request.supportedRecognitionLanguages()) ?? []
-            let usable = languages.filter { supported.contains($0) }
-            if !usable.isEmpty {
-                request.recognitionLanguages = usable
-            }
+        let supported = (try? request.supportedRecognitionLanguages()) ?? []
+        let usable = (languages ?? []).filter { supported.contains($0) }
+        if usable.isEmpty {
+            request.automaticallyDetectsLanguage = true
+        } else {
+            request.recognitionLanguages = usable
         }
 
         let handler = VNImageRequestHandler(cgImage: image, orientation: .up, options: [:])

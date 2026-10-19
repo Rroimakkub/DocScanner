@@ -7,6 +7,7 @@ struct PageThumbnail: View {
     var contentMode: ContentMode = .fill
 
     @State private var image: UIImage?
+    @State private var didFailToLoad = false
 
     var body: some View {
         ZStack {
@@ -14,13 +15,19 @@ struct PageThumbnail: View {
                 Image(uiImage: image)
                     .resizable()
                     .aspectRatio(contentMode: contentMode)
+            } else if didFailToLoad {
+                Image(systemName: "exclamationmark.triangle")
+                    .foregroundStyle(.secondary)
+                    .accessibilityLabel("โหลดภาพไม่สำเร็จ")
             } else {
                 ProgressView()
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .task(id: url) {
+            didFailToLoad = false
             image = await ImageLoader.thumbnail(for: url, maxPixelSize: maxPixelSize)
+            didFailToLoad = image == nil
         }
     }
 }

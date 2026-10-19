@@ -64,18 +64,24 @@ private struct PageImageView: View {
     let url: URL
 
     @State private var image: UIImage?
+    @State private var didFailToLoad = false
 
     var body: some View {
         ZStack {
             if let image {
                 ZoomableImageView(image: image)
+            } else if didFailToLoad {
+                Label("โหลดภาพไม่สำเร็จ", systemImage: "exclamationmark.triangle")
+                    .foregroundStyle(.white)
             } else {
                 ProgressView()
                     .tint(.white)
             }
         }
         .task(id: url) {
+            didFailToLoad = false
             image = await ImageLoader.fullImage(at: url)
+            didFailToLoad = image == nil
         }
     }
 }

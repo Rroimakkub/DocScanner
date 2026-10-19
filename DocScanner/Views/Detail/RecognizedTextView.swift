@@ -18,6 +18,12 @@ struct RecognizedTextView: View {
                     textList(for: document)
                 } else if store.isRecognizing(documentID) {
                     ProgressView("กำลังอ่านข้อความ…")
+                } else if document?.pages.contains(where: \.recognitionFailed) == true {
+                    ContentUnavailableView(
+                        "อ่านข้อความไม่สำเร็จ",
+                        systemImage: "exclamationmark.triangle",
+                        description: Text("ลองเลือก \"อ่านข้อความใหม่\" จากเมนูของเอกสาร")
+                    )
                 } else {
                     ContentUnavailableView(
                         "ไม่พบข้อความ",
@@ -47,13 +53,18 @@ struct RecognizedTextView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 24) {
                 ForEach(Array(document.pages.enumerated()), id: \.element.id) { index, page in
-                    if !page.text.isEmpty {
+                    if !page.text.isEmpty || page.recognitionFailed {
                         VStack(alignment: .leading, spacing: 6) {
                             Text("หน้า \(index + 1)")
                                 .font(.caption.weight(.semibold))
                                 .foregroundStyle(.secondary)
-                            Text(page.text)
-                                .textSelection(.enabled)
+                            if page.recognitionFailed {
+                                Label("อ่านข้อความหน้านี้ไม่สำเร็จ", systemImage: "exclamationmark.triangle")
+                                    .foregroundStyle(.secondary)
+                            } else {
+                                Text(page.text)
+                                    .textSelection(.enabled)
+                            }
                         }
                     }
                 }

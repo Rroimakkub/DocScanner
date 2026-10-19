@@ -1,6 +1,18 @@
 import CoreText
 import UIKit
 
+enum PDFExportError: LocalizedError {
+    /// 1-based page numbers whose image couldn't be loaded.
+    case unreadablePages([Int])
+
+    var errorDescription: String? {
+        switch self {
+        case let .unreadablePages(numbers):
+            return "อ่านภาพของหน้า \(numbers.map(String.init).joined(separator: ", ")) ไม่ได้"
+        }
+    }
+}
+
 enum PDFExporter {
     struct Page {
         var imageURL: URL
@@ -12,6 +24,7 @@ enum PDFExporter {
 
     /// Writes one PDF page per scanned image. OCR text, when there is some, is drawn invisibly on top
     /// of the image at the same position, so the PDF can be searched and its text selected.
+    /// Throws instead of writing a PDF with pages missing if any page image can't be loaded.
     static func writePDF(pages: [Page], title: String, to destination: URL) throws {
         try FileManager.default.createDirectory(
             at: destination.deletingLastPathComponent(),
@@ -26,11 +39,15 @@ enum PDFExporter {
         let defaultBounds = CGRect(x: 0, y: 0, width: pageWidth, height: pageWidth * 1.414)
         let renderer = UIGraphicsPDFRenderer(bounds: defaultBounds, format: format)
 
+        var unreadablePageNumbers: [Int] = []
         try renderer.writePDF(to: destination) { context in
-            for page in pages {
+            for (index, page) in pages.enumerated() {
                 autoreleasepool {
                     guard let image = UIImage(contentsOfFile: page.imageURL.path),
-                          image.size.width > 0, image.size.height > 0 else { return }
+                          image.size.width > 0, image.size.height > 0 else {
+                        unreadablePageNumbers.append(index + 1)
+                        return
+                    }
                     let bounds = CGRect(
                         x: 0,
                         y: 0,
@@ -42,6 +59,10 @@ enum PDFExporter {
                     drawInvisibleText(page.lines, in: bounds, context: context.cgContext)
                 }
             }
+        }
+        guard unreadablePageNumbers.isEmpty else {
+            try? FileManager.default.removeItem(at: destination)
+            throw PDFExportError.unreadablePages(unreadablePageNumbers)
         }
     }
 

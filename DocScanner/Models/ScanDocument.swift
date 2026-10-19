@@ -30,9 +30,28 @@ struct ScanPage: Codable, Hashable, Identifiable {
     var lines: [RecognizedLine] = []
     /// False until OCR has run on this page, so unfinished pages can be resumed on the next launch.
     var isTextRecognized = false
+    /// True when OCR ran on this page but failed. The page isn't retried on its own; the user can retry it.
+    var recognitionFailed = false
 
     var text: String {
         lines.map(\.text).joined(separator: "\n")
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case id, imageFileName, lines, isTextRecognized, recognitionFailed
+    }
+}
+
+extension ScanPage {
+    // Written by hand (in an extension, which keeps the memberwise initializer) so a document.json saved before
+    // a field existed still loads, with that field at its default.
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        id = try container.decode(UUID.self, forKey: .id)
+        imageFileName = try container.decode(String.self, forKey: .imageFileName)
+        lines = try container.decodeIfPresent([RecognizedLine].self, forKey: .lines) ?? []
+        isTextRecognized = try container.decodeIfPresent(Bool.self, forKey: .isTextRecognized) ?? false
+        recognitionFailed = try container.decodeIfPresent(Bool.self, forKey: .recognitionFailed) ?? false
     }
 }
 

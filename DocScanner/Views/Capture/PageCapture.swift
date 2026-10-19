@@ -9,9 +9,11 @@ enum CaptureSource {
     case photos
 }
 
-enum CameraProblem: Identifiable {
+enum CameraProblem: Identifiable, Hashable {
     case unsupported
     case denied
+    /// The document camera stopped with an error; holds its description.
+    case failed(String)
 
     var id: Self { self }
 
@@ -21,6 +23,8 @@ enum CameraProblem: Identifiable {
             return "ใช้กล้องสแกนไม่ได้"
         case .denied:
             return "ไม่ได้รับอนุญาตให้ใช้กล้อง"
+        case .failed:
+            return "สแกนไม่สำเร็จ"
         }
     }
 
@@ -30,6 +34,8 @@ enum CameraProblem: Identifiable {
             return "อุปกรณ์นี้ไม่รองรับการสแกนเอกสารด้วยกล้อง (เช่น Simulator) ลองนำเข้าจากรูปภาพแทน"
         case .denied:
             return "เปิดสิทธิ์กล้องให้แอปนี้ได้ที่ การตั้งค่า > สแกนเอกสาร > กล้อง"
+        case let .failed(description):
+            return "กล้องสแกนเอกสารเกิดข้อผิดพลาด ลองสแกนใหม่อีกครั้ง\n(\(description))"
         }
     }
 
@@ -49,12 +55,14 @@ enum CameraProblem: Identifiable {
     }
 }
 
-/// Shows the document camera or the photo picker whenever `request` is set, then hands back the images.
+/// Shows the document camera or the photo picker whenever `request` is set, then hands back the pages.
 private struct PageCaptureModifier: ViewModifier {
     @Binding var request: CaptureSource?
-    let onCapture: ([UIImage]) -> Void
+    let onCapture: ([CapturedPage]) -> Void
 
     @State private var isShowingCamera = false
+    /// A camera error waiting for the camera to finish closing, since an alert can't appear while it is on screen.
+    @State private var pendingCameraProblem: CameraProblem?
     @State private var isShowingPhotoPicker = false
     @State private var photoItems: [PhotosPickerItem] = []
     @State private var isLoadingPhotos = false
@@ -73,13 +81,21 @@ private struct PageCaptureModifier: ViewModifier {
                     isShowingPhotoPicker = true
                 }
             }
-            .fullScreenCover(isPresented: $isShowingCamera) {
-                DocumentCameraView { images in
+            .fullScreenCover(isPresented: $isShowingCamera, onDismiss: {
+                if let problem = pendingCameraProblem {
+                    pendingCameraProblem = nil
+                    cameraProblem = problem
+                }
+            }) {
+                DocumentCameraView { pages in
                     isShowingCamera = false
-                    if !images.isEmpty {
-                        onCapture(images)
+                    if !pages.isEmpty {
+                        onCapture(pages)
                     }
                 } onCancel: {
+                    isShowingCamera = false
+                } onFailure: { error in
+                    pendingCameraProblem = .failed(error.localizedDescription)
                     isShowingCamera = false
                 }
                 .ignoresSafeArea()
@@ -131,22 +147,23 @@ private struct PageCaptureModifier: ViewModifier {
     @MainActor
     private func importPhotos(_ items: [PhotosPickerItem]) async {
         isLoadingPhotos = true
-        var images: [UIImage] = []
+        var pages: [CapturedPage] = []
         for item in items {
-            if let data = try? await item.loadTransferable(type: Data.self), let image = UIImage(data: data) {
-                images.append(image)
+            // Keep the encoded file rather than a decoded image; pages are decoded one by one while saving.
+            if let data = try? await item.loadTransferable(type: Data.self), ImageProcessing.canDecode(data) {
+                pages.append(.imageData(data))
             }
         }
         isLoadingPhotos = false
-        if !images.isEmpty {
-            onCapture(images)
+        if !pages.isEmpty {
+            onCapture(pages)
         }
     }
 }
 
 extension View {
     /// Set `request` to `.camera` or `.photos` to start capturing; `onCapture` receives the pages in order.
-    func pageCapture(_ request: Binding<CaptureSource?>, onCapture: @escaping ([UIImage]) -> Void) -> some View {
+    func pageCapture(_ request: Binding<CaptureSource?>, onCapture: @escaping ([CapturedPage]) -> Void) -> some View {
         modifier(PageCaptureModifier(request: request, onCapture: onCapture))
     }
 }

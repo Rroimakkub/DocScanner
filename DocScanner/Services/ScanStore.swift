@@ -25,7 +25,11 @@ final class ScanStore {
     init(rootURL: URL = URL.documentsDirectory.appending(path: "Scans", directoryHint: .isDirectory)) {
         self.rootURL = rootURL
         try? FileManager.default.createDirectory(at: rootURL, withIntermediateDirectories: true)
-        documents = ScanFiles.loadDocuments(in: rootURL).sorted { $0.createdAt > $1.createdAt }
+        let loaded = ScanFiles.loadDocuments(in: rootURL)
+        documents = loaded.documents.sorted { $0.createdAt > $1.createdAt }
+        if loaded.unreadableCount > 0 {
+            errorMessage = "เปิดเอกสารไม่ได้ \(loaded.unreadableCount) รายการ เพราะไฟล์ข้อมูลของเอกสารเสียหาย"
+        }
 
         // Pick up OCR that was interrupted, e.g. the app was closed right after scanning.
         for document in documents {
@@ -58,10 +62,10 @@ final class ScanStore {
 
     // MARK: - Changes
 
-    /// Saves scanned images as a new document and starts OCR on it in the background.
+    /// Saves captured pages as a new document and starts OCR on it in the background.
     @discardableResult
-    func createDocument(from images: [UIImage]) async -> ScanDocument? {
-        guard !images.isEmpty else { return nil }
+    func createDocument(from captured: [CapturedPage]) async -> ScanDocument? {
+        guard !captured.isEmpty else { return nil }
         let id = UUID()
         let folder = folderURL(for: id)
         savingCount += 1
@@ -69,7 +73,7 @@ final class ScanStore {
 
         do {
             let pages = try await Task.detached(priority: .userInitiated) {
-                try ScanFiles.writePages(images, to: folder)
+                try ScanFiles.writePages(captured, to: folder)
             }.value
             let now = Date()
             let document = ScanDocument(
@@ -90,15 +94,16 @@ final class ScanStore {
         }
     }
 
-    func addPages(_ images: [UIImage], to documentID: UUID) async {
-        guard !images.isEmpty, document(id: documentID) != nil else { return }
+    func addPages(_ captured: [CapturedPage], to documentID: UUID) async {
+        guard !captured.isEmpty, document(id: documentID) != nil else { return }
         let folder = folderURL(for: documentID)
         savingCount += 1
         defer { savingCount -= 1 }
 
         do {
+            // On failure writePages removes the images it already wrote, so no stray files are left behind.
             let pages = try await Task.detached(priority: .userInitiated) {
-                try ScanFiles.writePages(images, to: folder)
+                try ScanFiles.writePages(captured, to: folder)
             }.value
             update(documentID) { document in
                 document.pages.append(contentsOf: pages)
@@ -137,6 +142,12 @@ final class ScanStore {
             document.pages.removeAll { $0.id == pageID }
         }
         try? FileManager.default.removeItem(at: imageURL(for: page, in: documentID))
+    }
+
+    /// Runs OCR again on the pages of a document where it failed.
+    func retryFailedRecognition(in documentID: UUID) {
+        guard !isRecognizing(documentID), let document = document(id: documentID) else { return }
+        enqueueRecognition(documentID: documentID, pageIDs: document.pages.filter(\.recognitionFailed).map(\.id))
     }
 
     // MARK: - Export
@@ -193,12 +204,14 @@ final class ScanStore {
             let job = recognitionQueue.removeFirst()
             if let page = document(id: job.documentID)?.pages.first(where: { $0.id == job.pageID }) {
                 let url = imageURL(for: page, in: job.documentID)
-                // A failed page is still marked as done so it isn't retried forever.
-                let lines = (try? await TextRecognizer.recognizeLines(inImageAt: url)) ?? []
+                let lines = try? await TextRecognizer.recognizeLines(inImageAt: url)
                 update(job.documentID, touch: false) { document in
                     guard let index = document.pages.firstIndex(where: { $0.id == job.pageID }) else { return }
-                    document.pages[index].lines = lines
+                    // A failed page is still marked as done so it isn't retried in a loop, but it is flagged
+                    // so the user sees why it has no text and can retry it (`retryFailedRecognition`).
+                    document.pages[index].lines = lines ?? []
                     document.pages[index].isTextRecognized = true
+                    document.pages[index].recognitionFailed = lines == nil
                 }
             }
             if !recognitionQueue.contains(where: { $0.documentID == job.documentID }) {
