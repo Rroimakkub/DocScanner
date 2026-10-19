@@ -5,7 +5,10 @@ name: Build iOS app
 on:
   push:
     branches: [main]
+    # Docs-only changes don't need a macOS build (private repos pay for macOS minutes).
+    paths-ignore: ['**.md']
   pull_request:
+    paths-ignore: ['**.md']
   workflow_dispatch:
 
 jobs:

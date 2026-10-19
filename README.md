@@ -2,9 +2,8 @@
 
 แอป SwiftUI สำหรับสแกนเอกสารด้วยกล้อง iPhone แล้วเก็บไว้ในเครื่อง ส่งออกเป็น PDF ได้ และอ่านข้อความไทย/อังกฤษในเอกสารให้ด้วย (OCR)
 
-> ⚠️ **โค้ดชุดนี้เขียนบน Windows จึงยังไม่เคยถูก compile**
-> การ build แอป iOS ต้องใช้ Xcode ซึ่งมีบน macOS เท่านั้น ตอน build ครั้งแรกอาจเจอ error เล็กๆ น้อยๆ ได้
-> ถ้าเจอ ให้ส่งข้อความ error มา แล้วค่อยแก้ทีละจุด
+> ✅ build ผ่านบน GitHub Actions แล้ว (Xcode 16.4, ไม่มี error และไม่มี warning ของ Swift)
+> ⚠️ แต่ยังไม่ได้ทดสอบการใช้งานจริงบน iPhone
 
 ## ฟีเจอร์
 
@@ -71,7 +70,10 @@
    git remote add origin https://github.com/<ชื่อผู้ใช้>/DocScanner.git && git push -u origin main
    ```
 
+   (repo นี้สร้างไว้แล้วที่ https://github.com/Rroimakkub/DocScanner แบบ private)
+
 2. เปิดแท็บ **Actions** ใน repo แล้วรอ workflow **Build iOS app** ทำงานเสร็จ (สั่งรันเองได้ด้วยปุ่ม Run workflow)
+   - push ที่แก้แค่ไฟล์ `.md` จะไม่สั่ง build เพื่อประหยัดโควตา
    - ถ้าขึ้นสีแดง ให้เปิด log ของขั้นตอน "Build" ดู error ของ Swift แล้วนำมาแก้
 3. เมื่อสำเร็จ ดาวน์โหลด artifact **DocScanner-unsigned-ipa** (ได้ไฟล์ zip ข้างในเป็น `DocScanner-unsigned.ipa`)
 4. เซ็นและติดตั้งลง iPhone จาก Windows ด้วยเครื่องมือ sideload เช่น [Sideloadly](https://sideloadly.io) หรือ [AltStore](https://altstore.io)
@@ -132,7 +134,7 @@ Documents/Scans/<รหัสเอกสาร>/<รหัสหน้า>.jpg 
 
 ## ข้อจำกัดที่รู้อยู่
 
-- ยังไม่ได้ compile และทดสอบบนเครื่องจริง (ดูหมายเหตุด้านบน)
+- build ผ่านแล้ว แต่ยังไม่ได้ทดสอบบนเครื่องจริง (ดูหมายเหตุด้านบน)
 - ยังจัดลำดับหน้าใหม่ไม่ได้ ทำได้แค่เพิ่มต่อท้ายและลบ
 - ชั้นข้อความใน PDF วางตามตำแหน่งที่ OCR ตรวจพบ การคลุมข้อความใน PDF อาจไม่ตรงเป๊ะกับภาพ
 - ข้อความ UI เป็นภาษาไทยในโค้ดโดยตรง ยังไม่ได้แยกเป็นไฟล์แปลภาษา
